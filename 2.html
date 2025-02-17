@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>20周随机排班表</title>
+  <style>
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+    }
+    th, td {
+      border: 1px solid #000;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+  </style>
+</head>
+<body>
+  <h1>20周随机排班表</h1>
+  <button onclick="generateSchedule()">生成排班表</button>
+  <div id="scheduleTable"></div>
+
+  <script>
+    // 初始班级和老师数据
+    const initialClasses = [
+      { class: '101班', teachers: ['刘嫚', '贺小燕', '张伟'] },
+      { class: '102班', teachers: ['吴婷婷', '李强', '王芳'] },
+      { class: '201班', teachers: ['朱小玲', '陈华', '赵丽'] },
+      { class: '202班', teachers: ['熊蔚', '何倩', '孙明'] },
+      { class: '203班', teachers: ['王玥', '周勇', '杨敏'] }
+    ];
+
+    const weeks = 20; // 总共排20周
+
+    // 初始化老师的值班计数器
+    let teacherCount = {};
+
+    // 初始化老师的关联计数器
+    let associationCount = {};
+
+    // 初始化老师的计数
+    function initializeTeacherCount(classes) {
+      teacherCount = {};
+      associationCount = {};
+      classes.forEach(cls => {
+        cls.teachers.forEach(teacher => {
+          teacherCount[teacher] = 0;
+          associationCount[teacher] = {};
+        });
+      });
+    }
+
+    // 检查老师是否连续两天值班
+    function isTeacherScheduledInPreviousWeek(teacher, classSchedule, weekIndex) {
+      if (weekIndex === 0) return false; // 第一周不存在上周的排班
+      return classSchedule[weekIndex - 1].includes(teacher); // 检查上周是否该老师值班
+    }
+
+    // 检查关联老师是否在同一天值班
+    function isAssociatedTeacherScheduled(teacher, classSchedule, weekIndex, associations) {
+      if (weekIndex === 0) return false; // 第一周不存在上周的排班
+      const associatedTeachers = associations[teacher] || [];
+      return associatedTeachers.some(assocTeacher => classSchedule[weekIndex].includes(assocTeacher));
+    }
+
+    // 生成随机排班
+    function getBalancedSchedule(classes, associations) {
+      // 创建每个班级的20周排班表
+      const schedule = classes.map(cls => {
+        const classSchedule = [];
+
+        for (let week = 0; week < weeks; week++) {
+          let availableTeachers = cls.teachers.slice(); // 获取老师的副本
+
+          // 排除上周值班的老师，确保不连续排班
+          availableTeachers = availableTeachers.filter(teacher => 
+            !isTeacherScheduledInPreviousWeek(teacher, classSchedule, week)
+          );
+
+          // 如果没有可用老师（所有老师上周都有排班），则重置为所有老师
+          if (availableTeachers.length === 0) {
+            availableTeachers = cls.teachers.slice();
+          }
+
+          // 优先选择值班次数最少的老师
+          availableTeachers.sort((a, b) => teacherCount[a] - teacherCount[b]);
+
+          // 检查关联老师是否在同一天值班
+          availableTeachers = availableTeachers.filter(teacher => 
+            !isAssociatedTeacherScheduled(teacher, schedule, week, associations)
+          );
+
+          // 如果没有可用老师（所有老师都违反关联规则），则重置为所有老师
+          if (availableTeachers.length === 0) {
+            availableTeachers = cls.teachers.slice();
+          }
+
+          // 选择值班次数最少的老师
+          const assignedTeacher = availableTeachers[0];
+          classSchedule.push(assignedTeacher);
+
+          // 更新计数器
+          teacherCount[assignedTeacher]++;
+          associations[assignedTeacher].forEach(assocTeacher => {
+            associationCount[assignedTeacher][assocTeacher] = (associationCount[assignedTeacher][assocTeacher] || 0) + 1;
+          });
+        }
+
+        return { class: cls.class, schedule: classSchedule };
+      });
+
+      return schedule;
+    }
+
+    // 定义老师关联关系
+    const teacherAssociations = {
+      '刘嫚': ['王玥'],
+      '王玥': ['刘嫚'],
+      '吴婷婷': ['朱小玲'],
+      '朱小玲': ['吴婷婷']
+    };
+
+    // 生成并渲染排班表
+    function generateSchedule() {
+      initializeTeacherCount(initialClasses); // 初始化老师值班次数
+
+      let schedule = getBalancedSchedule(initialClasses, teacherAssociations);
+
+      // 构建表格HTML
+      let tableHTML = '<table><thead><tr><th>周次</th>';
+      
+      // 添加班级标题
+      initialClasses.forEach(cls => {
+        tableHTML += `<th>${cls.class}</th>`;
+      });
+      tableHTML += '</tr></thead><tbody>';
+
+      // 按周次添加排班
+      for (let week = 0; week < weeks; week++) {
+        tableHTML += `<tr><td>第${week + 1}周</td>`;
+        schedule.forEach(item => {
+          tableHTML += `<td>${item.schedule[week]}</td>`;
+        });
+        tableHTML += '</tr>';
+      }
+
+      tableHTML += '</tbody></table>';
+
+      // 将表格渲染到页面
+      document.getElementById('scheduleTable').innerHTML = tableHTML;
+    }
+  </script>
+</body>
+</html>

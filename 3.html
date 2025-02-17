@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>动态排班系统</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+      }
+      label {
+        display: block;
+        margin-top: 10px;
+      }
+      input,
+      button {
+        margin-top: 5px;
+        padding: 8px;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+      }
+      th,
+      td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: center;
+      }
+      th {
+        background-color: #f2f2f2;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>动态排班系统</h1>
+
+      <!-- 录入班级和老师信息 -->
+      <label for="classCount">班级个数:</label>
+      <input type="number" id="classCount" min="1" placeholder="请输入班级个数" />
+      <button onclick="setupClasses()">设置班级</button>
+
+      <div id="classInputs"></div>
+
+      <button onclick="generateSchedule()" style="margin-top: 20px">生成排班表</button>
+
+      <!-- 显示排班表 -->
+      <h2>排班表</h2>
+      <table id="scheduleTable">
+        <thead>
+          <tr>
+            <th>周次</th>
+            <th>值班老师</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- 排班表内容将通过JavaScript动态生成 -->
+        </tbody>
+      </table>
+    </div>
+
+    <script>
+      let classes = []; // 存储班级和老师信息
+
+      // 设置班级输入框
+      function setupClasses() {
+        const classCount = parseInt(document.getElementById("classCount").value);
+        if (isNaN(classCount)) {
+          alert("请输入有效的班级个数！");
+          return;
+        }
+
+        let html = "";
+        for (let i = 1; i <= classCount; i++) {
+          html += `
+                    <label for="class${i}">班级${i}的老师（用逗号分隔）:</label>
+                    <input type="text" id="class${i}" placeholder="例如: 张老师,李老师,王老师">
+                `;
+        }
+        document.getElementById("classInputs").innerHTML = html;
+      }
+
+      // 生成排班表
+      function generateSchedule() {
+        const classCount = parseInt(document.getElementById("classCount").value);
+        if (isNaN(classCount)) {
+          alert("请先设置班级个数！");
+          return;
+        }
+
+        // 获取每个班级的老师
+        classes = [];
+        for (let i = 1; i <= classCount; i++) {
+          const teachers = document
+            .getElementById(`class${i}`)
+            .value.split(",")
+            .map(t => t.trim());
+          if (teachers.length === 0) {
+            alert(`请为班级${i}输入至少一位老师！`);
+            return;
+          }
+          classes.push(teachers);
+        }
+
+        // 检查是否有足够的班级
+        if (classes.length < 3) {
+          alert("至少需要3个班级才能满足一班和三班老师一起值班的要求！");
+          return;
+        }
+
+        const weeks = 20; // 每学期20周
+        const scheduleTable = document
+          .getElementById("scheduleTable")
+          .getElementsByTagName("tbody")[0];
+        scheduleTable.innerHTML = "";
+
+        let lastTeachers = []; // 记录上周的值班老师，避免连续值班
+
+        for (let week = 1; week <= weeks; week++) {
+          const row = document.createElement("tr");
+          const weekCell = document.createElement("td");
+          weekCell.textContent = `第${week}周`;
+          row.appendChild(weekCell);
+
+          const teacherCell = document.createElement("td");
+
+          // 选择一班和三班的老师
+          const class1Teachers = classes[0];
+          const class3Teachers = classes[2];
+
+          // 确保不连续值班
+          let teacher1, teacher3;
+          do {
+            teacher1 = class1Teachers[Math.floor(Math.random() * class1Teachers.length)];
+            teacher3 = class3Teachers[Math.floor(Math.random() * class3Teachers.length)];
+          } while (lastTeachers.includes(teacher1) || lastTeachers.includes(teacher3));
+
+          teacherCell.textContent = `${teacher1}（一班） 和 ${teacher3}（三班）`;
+          row.appendChild(teacherCell);
+
+          scheduleTable.appendChild(row);
+
+          // 更新上周的值班老师
+          lastTeachers = [teacher1, teacher3];
+        }
+      }
+    </script>
+  </body>
+</html>
