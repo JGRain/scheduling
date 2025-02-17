@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>学期排班表生成</title>
+		<style>
+			table {
+				width: 100%;
+				border-collapse: collapse;
+				margin-bottom: 20px;
+			}
+			th,
+			td {
+				border: 1px solid #000;
+				padding: 8px;
+				text-align: center;
+			}
+			th {
+				background-color: #f2f2f2;
+			}
+			input {
+				margin: 5px 0;
+			}
+		</style>
+	</head>
+	<body>
+		<h1>学期排班表生成</h1>
+		<div>
+			<label>学期周数（默认20）：<input type="number" id="weeksInput" value="20" /></label><br />
+			<label>班级数量：<input type="number" id="classCountInput" value="3" /></label><br />
+			<button onclick="setupClasses()">设置班级</button>
+		</div>
+
+		<div id="classInputs"></div>
+		<div id="sameDayInputs"></div>
+
+		<div id="scheduleTable"></div>
+		<div id="statTable"></div>
+		<!-- 用于显示排班数量统计表格 -->
+
+		<script>
+			let classes = []
+			let sameDayRequests = [] // 跨班级同一天值班的需求列表
+
+			// 设置班级和老师的录入
+			function setupClasses() {
+				const classCount = document.getElementById('classCountInput').value
+				const classInputsDiv = document.getElementById('classInputs')
+				classInputsDiv.innerHTML = ''
+
+				for (let i = 0; i < classCount; i++) {
+					const div = document.createElement('div')
+					div.innerHTML = `
+          <label>班级${i + 1} 名称: <input type="text" id="className${i}" value="班级${i + 1}"></label><br>
+          <label>班级${i + 1} 老师数量: <input type="number" id="teacherCount${i}" value="3"></label><br>
+        `
+					classInputsDiv.appendChild(div)
+				}
+
+				const sameDayDiv = document.createElement('div')
+				sameDayDiv.innerHTML = `
+        <h3>跨班级同一天值班的要求</h3>
+        <button onclick="addSameDayRequest()">追加同一天值班要求</button>
+      `
+				document.getElementById('sameDayInputs').innerHTML = ''
+				document.getElementById('sameDayInputs').appendChild(sameDayDiv)
+
+				const button = document.createElement('button')
+				button.textContent = '生成排班表'
+				button.onclick = generateSchedule
+				classInputsDiv.appendChild(button)
+			}
+
+			// 追加同一天值班的需求
+			function addSameDayRequest() {
+				const sameDayDiv = document.createElement('div')
+				const classCount = parseInt(document.getElementById('classCountInput').value)
+				let classOptions = ''
+
+				for (let i = 0; i < classCount; i++) {
+					const className = document.getElementById(`className${i}`).value
+					classOptions += `<option value="${className}">${className}</option>`
+				}
+
+				sameDayDiv.innerHTML = `
+        <label>选择班级1: 
+          <select class="classSelect">${classOptions}</select>
+        </label>
+        <label>选择关联班级、老师编号: <input type="number" class="teacherSelect" value="1" min="1"></label>
+        <br>
+        <label>被关联班级、老师编号: 
+          <select class="classSelect">${classOptions}</select>
+        </label>
+        <label>选择班级2老师编号: <input type="number" class="teacherSelect" value="1" min="1"></label>
+        <br>
+      `
+				document.getElementById('sameDayInputs').appendChild(sameDayDiv)
+			}
+
+			// 生成排班表
+			function generateSchedule() {
+				const weekCount = parseInt(document.getElementById('weeksInput').value)
+				const classCount = parseInt(document.getElementById('classCountInput').value)
+				classes = []
+				sameDayRequests = []
+
+				for (let i = 0; i < classCount; i++) {
+					const className = document.getElementById(`className${i}`).value
+					const teacherCount = parseInt(document.getElementById(`teacherCount${i}`).value)
+					const teachers = Array.from({ length: teacherCount }, (_, index) => `${className}老师${index + 1}`)
+					classes.push({ className, teachers })
+				}
+
+				// 读取同一天值班的需求
+				const classSelects = document.getElementsByClassName('classSelect')
+				const teacherSelects = document.getElementsByClassName('teacherSelect')
+
+				for (let i = 0; i < classSelects.length; i += 2) {
+					const class1 = classSelects[i].value
+					const teacher1 = `${class1}老师${teacherSelects[i].value}`
+					const class2 = classSelects[i + 1].value
+					const teacher2 = `${class2}老师${teacherSelects[i + 1].value}`
+					sameDayRequests.push({ class1, teacher1, class2, teacher2 })
+				}
+
+				let schedule = getBalancedSchedule(weekCount)
+				renderSchedule(schedule, weekCount)
+				renderStats(schedule, weekCount)
+			}
+
+			// 获取均匀排班
+			function getBalancedSchedule(weekCount) {
+				const schedule = []
+
+				// 初始化每个班级的值班表
+				classes.forEach((cls) => {
+					const classSchedule = []
+					const teacherWorkload = {} // 记录每个老师的值班次数
+					cls.teachers.forEach((teacher) => (teacherWorkload[teacher] = 0))
+
+					for (let week = 0; week < weekCount; week++) {
+						// 找到当前排班次数最少的老师
+						const minWorkload = Math.min(...Object.values(teacherWorkload))
+						let availableTeachers = cls.teachers.filter((teacher) => teacherWorkload[teacher] === minWorkload)
+
+						// 确保老师不连续值班
+						if (week > 0) {
+							availableTeachers = availableTeachers.filter((teacher) => teacher !== classSchedule[week - 1])
+						}
+
+						const assignedTeacher = availableTeachers[Math.floor(Math.random() * availableTeachers.length)]
+						classSchedule.push(assignedTeacher)
+						teacherWorkload[assignedTeacher] += 1
+					}
+
+					schedule.push({ className: cls.className, schedule: classSchedule })
+				})
+
+				// 处理跨班级同一天值班需求
+				sameDayRequests.forEach((req) => {
+					const week = Math.floor(Math.random() * weekCount) // 随机选择某一周
+					const class1Schedule = schedule.find((s) => s.className === req.class1)
+					const class2Schedule = schedule.find((s) => s.className === req.class2)
+
+					class1Schedule.schedule[week] = req.teacher1
+					class2Schedule.schedule[week] = req.teacher2
+				})
+
+				return schedule
+			}
+
+			// 渲染排班表
+			function renderSchedule(schedule, weekCount) {
+				let tableHTML = '<table><thead><tr><th>周次</th>'
+
+				// 添加班级列头
+				schedule.forEach((item) => {
+					tableHTML += `<th>${item.className}</th>`
+				})
+
+				tableHTML += '</tr></thead><tbody>'
+
+				// 每周展示
+				for (let week = 0; week < weekCount; week++) {
+					tableHTML += `<tr><td>第${week + 1}周</td>`
+					schedule.forEach((item) => {
+						tableHTML += `<td>${item.schedule[week]}</td>`
+					})
+					tableHTML += '</tr>'
+				}
+
+				tableHTML += '</tbody></table>'
+
+				document.getElementById('scheduleTable').innerHTML = tableHTML
+			}
+
+			// 渲染排班统计表
+			function renderStats(schedule, weekCount) {
+				let statHTML =
+					'<h3>排班数量统计</h3><table><thead><tr><th>班级</th><th>老师</th><th>值班次数</th></tr></thead><tbody>'
+
+				schedule.forEach((classItem) => {
+					const teacherWorkload = {}
+
+					// 统计每个老师的值班次数
+					classItem.schedule.forEach((teacher) => {
+						if (!teacherWorkload[teacher]) teacherWorkload[teacher] = 0
+						teacherWorkload[teacher]++
+					})
+
+					Object.keys(teacherWorkload).forEach((teacher) => {
+						statHTML += `<tr><td>${classItem.className}</td><td>${teacher}</td><td>${teacherWorkload[teacher]}</td></tr>`
+					})
+				})
+
+				statHTML += '</tbody></table>'
+
+				document.getElementById('statTable').innerHTML = statHTML
+			}
+		</script>
+	</body>
+</html>
